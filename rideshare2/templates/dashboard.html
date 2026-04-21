@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Welcome back, {{ user }} 👋</h2>
+  <p>Here's your ride activity overview</p>
+</div>
+
+<!-- Stats Grid -->
+<div class="stats-grid" id="statsGrid">
+  <div class="stat-card">
+    <div class="stat-icon" style="background:rgba(99,102,241,0.12)">🚗</div>
+    <div class="stat-value" id="statRidesPosted">—</div>
+    <div class="stat-label">Rides Posted</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:rgba(16,185,129,0.12)">🎫</div>
+    <div class="stat-value" id="statRidesBooked">—</div>
+    <div class="stat-label">Rides Booked</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:rgba(168,85,247,0.12)">💰</div>
+    <div class="stat-value" id="statTotalSpent">—</div>
+    <div class="stat-label">Total Spent</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:rgba(245,158,11,0.12)">📩</div>
+    <div class="stat-value" id="statPendingReqs">—</div>
+    <div class="stat-label">Pending Requests</div>
+  </div>
+</div>
+
+<hr class="divider" style="margin:28px 0">
+
+<!-- Quick Actions -->
+<h3 style="margin-bottom:16px">Quick Actions</h3>
+<div class="grid-3" style="margin-bottom:32px">
+  <a href="/search" class="card" style="text-decoration:none;cursor:pointer">
+    <div style="font-size:2rem;margin-bottom:10px">🔍</div>
+    <h3>Find a Ride</h3>
+    <p style="font-size:0.875rem;margin-top:4px">Browse available rides on campus</p>
+  </a>
+  <a href="/post-ride" class="card" style="text-decoration:none;cursor:pointer">
+    <div style="font-size:2rem;margin-bottom:10px">➕</div>
+    <h3>Post a Ride</h3>
+    <p style="font-size:0.875rem;margin-top:4px">Offer seats in your vehicle</p>
+  </a>
+  <a href="/driver-requests" class="card" style="text-decoration:none;cursor:pointer">
+    <div style="font-size:2rem;margin-bottom:10px">📩</div>
+    <h3>Manage Requests</h3>
+    <p style="font-size:0.875rem;margin-top:4px">Accept or reject ride requests</p>
+  </a>
+</div>
+
+<!-- Recent Rides -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+  <h3>Recent Available Rides</h3>
+  <a href="/search" class="btn btn-outline btn-sm">View All →</a>
+</div>
+
+<div class="rides-grid" id="recentRides">
+  <div class="loading-overlay"><div class="spinner"></div><span>Loading rides...</span></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadStats() {
+  try {
+    const stats = await API.get('/api/stats');
+    document.getElementById('statRidesPosted').textContent = stats.rides_posted;
+    document.getElementById('statRidesBooked').textContent = stats.rides_booked;
+    document.getElementById('statTotalSpent').textContent  = Format.currency(stats.total_spent);
+    document.getElementById('statPendingReqs').textContent = stats.pending_reqs;
+  } catch(e) { console.error(e); }
+}
+
+async function loadRecentRides() {
+  try {
+    const rides = await API.get('/api/rides?sort=ride_time');
+    const container = document.getElementById('recentRides');
+    if (!rides.length) {
+      container.innerHTML = `<div class="empty-state"><div class="empty-icon">🚗</div><h3>No rides available</h3><p>Check back later or post your own!</p></div>`;
+      return;
+    }
+    container.innerHTML = rides.slice(0,6).map(ride => rideCardHTML(ride, `
+      <button class="btn btn-primary btn-sm" onclick="requestRide(${ride.ride_id})">Request Ride</button>
+    `)).join('');
+  } catch(e) { console.error(e); }
+}
+
+async function requestRide(rideId) {
+  try {
+    await API.post('/api/requests', { ride_id: rideId });
+    Toast.show('Ride request sent! Waiting for driver approval.', 'success');
+  } catch(e) { Toast.show(e.message, 'error'); }
+}
+
+loadStats();
+loadRecentRides();
+</script>
+{% endblock %}

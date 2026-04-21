@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}My Bookings{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>🎫 My Bookings</h2>
+  <p>All your ride requests and confirmed bookings</p>
+</div>
+
+<div id="bookingsContainer">
+  <div class="loading-overlay"><div class="spinner"></div><span>Loading bookings...</span></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadBookings() {
+  const container = document.getElementById('bookingsContainer');
+  try {
+    const bookings = await API.get('/api/my-bookings');
+    if (!bookings.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🎫</div>
+          <h3>No bookings yet</h3>
+          <p>Find a ride and send a request to get started</p>
+          <a href="/search" class="btn btn-primary" style="margin-top:12px">Find Rides</a>
+        </div>`;
+      return;
+    }
+
+    const statusOrder = { Accepted:0, Pending:1, Rejected:2, Cancelled:3 };
+    bookings.sort((a,b) => (statusOrder[a.req_status]||9) - (statusOrder[b.req_status]||9));
+
+    container.innerHTML = `
+      <div class="rides-grid">
+        ${bookings.map(b => `
+          <div class="ride-card">
+            <div class="flex items-center justify-between">
+              <div class="driver-info">
+                <div class="driver-avatar">${Format.initials(b.driver_name)}</div>
+                <div>
+                  <div style="font-weight:600;font-size:0.9rem">${b.driver_name}</div>
+                  <div style="font-size:0.75rem;color:var(--text-muted)">${b.driver_phone || ''}</div>
+                </div>
+              </div>
+              ${badge(b.req_status)}
+            </div>
+
+            <div class="ride-route">
+              <span>${b.source}</span><span class="arrow">→</span><span>${b.destination}</span>
+            </div>
+
+            <div class="ride-meta">
+              <span class="meta-chip">🕐 ${Format.datetime(b.ride_time)}</span>
+            </div>
+
+            <div style="background:rgba(99,102,241,0.06);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;display:flex;justify-content:space-between;font-size:0.875rem">
+              <span style="color:var(--text-secondary)">Fare</span>
+              <strong>${Format.currency(b.amount || b.price_per_seat)}</strong>
+            </div>
+
+            <div style="display:flex;gap:8px">
+              <span class="meta-chip" style="flex:1;justify-content:center">
+                Payment: ${b.payment_status || 'Pending'}
+              </span>
+              ${b.req_status === 'Pending' || b.req_status === 'Accepted' ? `
+                <button class="btn btn-danger btn-sm" onclick="cancelBooking(${b.request_id})">
+                  Cancel
+                </button>` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>`;
+  } catch(e) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><h3>${e.message}</h3></div>`;
+  }
+}
+
+async function cancelBooking(reqId) {
+  if (!confirm('Cancel this booking?')) return;
+  try {
+    await API.patch(`/api/requests/${reqId}/cancel`);
+    Toast.show('Booking cancelled', 'info');
+    loadBookings();
+  } catch(e) { Toast.show(e.message, 'error'); }
+}
+
+loadBookings();
+</script>
+{% endblock %}

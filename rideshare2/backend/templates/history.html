@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Ride History{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>📜 Ride History</h2>
+  <p>Your complete ride activity as driver and rider</p>
+</div>
+
+<!-- Tabs -->
+<div style="display:flex;gap:4px;background:var(--bg-surface);border:1px solid var(--border);padding:4px;border-radius:var(--radius-sm);width:fit-content;margin-bottom:24px">
+  <button class="btn btn-primary btn-sm" id="tabDriver" onclick="setTab('driver')">🚗 As Driver</button>
+  <button class="btn btn-ghost btn-sm"   id="tabRider"  onclick="setTab('rider')">🧑 As Rider</button>
+</div>
+
+<div id="driverHistory"></div>
+<div id="riderHistory" style="display:none"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let historyData = null;
+
+function setTab(tab) {
+  document.getElementById('driverHistory').style.display = tab === 'driver' ? '' : 'none';
+  document.getElementById('riderHistory').style.display  = tab === 'rider'  ? '' : 'none';
+  document.getElementById('tabDriver').className = 'btn btn-sm ' + (tab==='driver' ? 'btn-primary' : 'btn-ghost');
+  document.getElementById('tabRider').className  = 'btn btn-sm ' + (tab==='rider'  ? 'btn-primary' : 'btn-ghost');
+}
+
+async function loadHistory() {
+  try {
+    historyData = await API.get('/api/history');
+    renderDriver(historyData.as_driver);
+    renderRider(historyData.as_rider);
+  } catch(e) { console.error(e); }
+}
+
+function renderDriver(rides) {
+  const el = document.getElementById('driverHistory');
+  if (!rides.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🚗</div><h3>No rides driven yet</h3><a href="/post-ride" class="btn btn-primary" style="margin-top:12px">Post a Ride</a></div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:0.875rem">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border)">
+            <th style="text-align:left;padding:10px 12px;color:var(--text-muted);font-weight:600;font-size:0.78rem;letter-spacing:.05em;text-transform:uppercase">Route</th>
+            <th style="text-align:left;padding:10px 12px;color:var(--text-muted);font-weight:600;font-size:0.78rem;letter-spacing:.05em;text-transform:uppercase">Date & Time</th>
+            <th style="text-align:left;padding:10px 12px;color:var(--text-muted);font-weight:600;font-size:0.78rem;letter-spacing:.05em;text-transform:uppercase">Riders</th>
+            <th style="text-align:left;padding:10px 12px;color:var(--text-muted);font-weight:600;font-size:0.78rem;letter-spacing:.05em;text-transform:uppercase">Price/seat</th>
+            <th style="text-align:left;padding:10px 12px;color:var(--text-muted);font-weight:600;font-size:0.78rem;letter-spacing:.05em;text-transform:uppercase">Status</th>
+            <th style="text-align:left;padding:10px 12px;color:var(--text-muted);font-weight:600;font-size:0.78rem;letter-spacing:.05em;text-transform:uppercase">Earned</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rides.map(r => `
+            <tr style="border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--bg-card-hover)'" onmouseout="this.style.background=''">
+              <td style="padding:12px"><strong>${r.source} → ${r.destination}</strong></td>
+              <td style="padding:12px;color:var(--text-secondary)">${Format.datetime(r.ride_time)}</td>
+              <td style="padding:12px">${r.accepted_riders || 0} / ${r.total_seats}</td>
+              <td style="padding:12px">${Format.currency(r.price_per_seat)}</td>
+              <td style="padding:12px">${badge(r.status)}</td>
+              <td style="padding:12px">
+                <span style="color:#10b981;font-weight:700">
+                  ${Format.currency((r.accepted_riders||0) * r.price_per_seat)}
+                </span>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function renderRider(rides) {
+  const el = document.getElementById('riderHistory');
+  if (!rides.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🧑</div><h3>No rides taken yet</h3><a href="/search" class="btn btn-primary" style="margin-top:12px">Find a Ride</a></div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:0.875rem">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border)">
+            <th style="text-align:left;padding:10px 12px;color:var(--text-muted);font-weight:600;font-size:0.78rem;letter-spacing:.05em;text-transform:uppercase">Route</th>
+            <th style="text-align:left;padding:10px 12px;color:var(--text-muted);font-weight:600;font-size:0.78rem;letter-spacing:.05em;text-transform:uppercase">Date & Time</th>
+            <th style="text-align:left;padding:10px 12px;color:var(--text-muted);font-weight:600;font-size:0.78rem;letter-spacing:.05em;text-transform:uppercase">Driver</th>
+            <th style="text-align:left;padding:10px 12px;color:var(--text-muted);font-weight:600;font-size:0.78rem;letter-spacing:.05em;text-transform:uppercase">Status</th>
+            <th style="text-align:left;padding:10px 12px;color:var(--text-muted);font-weight:600;font-size:0.78rem;letter-spacing:.05em;text-transform:uppercase">Paid</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rides.map(r => `
+            <tr style="border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--bg-card-hover)'" onmouseout="this.style.background=''">
+              <td style="padding:12px"><strong>${r.source} → ${r.destination}</strong></td>
+              <td style="padding:12px;color:var(--text-secondary)">${Format.datetime(r.ride_time)}</td>
+              <td style="padding:12px">${r.driver_name}</td>
+              <td style="padding:12px">${badge(r.status)}</td>
+              <td style="padding:12px">
+                <span style="color:${r.payment_status==='Paid'?'#10b981':'var(--text-muted)'}">
+                  ${r.amount ? Format.currency(r.amount) : '—'}
+                  ${r.payment_status ? `(${r.payment_status})` : ''}
+                </span>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+loadHistory();
+</script>
+{% endblock %}

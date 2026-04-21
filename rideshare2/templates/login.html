@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — NextRide</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    .auth-page {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .auth-hero {
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 48px;
+      position: relative; overflow: hidden;
+    }
+
+    .auth-hero::before {
+      content: '';
+      position: absolute;
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%);
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .hero-title {
+      font-size: 3rem; font-weight: 800;
+      background: var(--gradient-hero);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 16px;
+      z-index: 1;
+    }
+
+    .hero-subtitle { color: var(--text-secondary); font-size: 1.1rem; z-index: 1; text-align: center; }
+
+    .feature-list { list-style: none; margin-top: 32px; z-index: 1; display: flex; flex-direction: column; gap: 12px; }
+    .feature-list li {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 0.9rem; color: var(--text-secondary);
+    }
+    .feature-list li .f-icon {
+      width: 32px; height: 32px;
+      background: rgba(99,102,241,0.12);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; flex-shrink: 0;
+    }
+
+    .auth-form-panel {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 48px;
+    }
+
+    .auth-card {
+      width: 100%; max-width: 400px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 36px;
+      box-shadow: var(--shadow-card);
+    }
+
+    .auth-card h2 { margin-bottom: 6px; }
+    .auth-card .subtitle { color: var(--text-muted); font-size: 0.875rem; margin-bottom: 28px; }
+
+    .auth-form { display: flex; flex-direction: column; gap: 16px; }
+
+    .divider-text {
+      display: flex; align-items: center; gap: 12px;
+      color: var(--text-muted); font-size: 0.8rem; margin: 8px 0;
+    }
+    .divider-text::before, .divider-text::after {
+      content: ''; flex: 1; border-top: 1px solid var(--border);
+    }
+
+    .floating-cars {
+      position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+    }
+    .float-car {
+      position: absolute; font-size: 1.5rem; opacity: 0.1;
+      animation: floatCar 8s ease-in-out infinite;
+    }
+
+    @keyframes floatCar {
+      0%, 100% { transform: translateY(0) rotate(-5deg); }
+      50%       { transform: translateY(-15px) rotate(5deg); }
+    }
+
+    @media (max-width: 768px) {
+      .auth-page { grid-template-columns: 1fr; }
+      .auth-hero { display: none; }
+      .auth-form-panel { padding: 24px 16px; }
+    }
+  </style>
+</head>
+<body>
+<div class="auth-page">
+
+  <!-- Hero Side -->
+  <div class="auth-hero">
+    <div class="floating-cars">
+      <span class="float-car" style="top:20%;left:10%;animation-delay:0s">🚗</span>
+      <span class="float-car" style="top:60%;left:20%;animation-delay:2s">🏎</span>
+      <span class="float-car" style="top:40%;left:70%;animation-delay:4s">🚙</span>
+      <span class="float-car" style="top:75%;left:60%;animation-delay:1s">🚕</span>
+    </div>
+    <div class="logo-icon" style="width:56px;height:56px;font-size:1.8rem;margin-bottom:16px;z-index:1">🚗</div>
+    <h1 class="hero-title">NextRide</h1>
+    <p class="hero-subtitle">Campus ride-sharing made simple, safe & affordable.</p>
+    <ul class="feature-list">
+      <li><div class="f-icon">💺</div>Split fares with classmates</li>
+      <li><div class="f-icon">🗓</div>Schedule rides in advance</li>
+      <li><div class="f-icon">🔒</div>Verified student-only platform</li>
+      <li><div class="f-icon">⚡</div>Instant booking confirmation</li>
+    </ul>
+  </div>
+
+  <!-- Form Side -->
+  <div class="auth-form-panel">
+    <!-- Theme toggle top-right -->
+    <div style="position:fixed;top:16px;right:16px">
+      <button class="theme-toggle" id="themeToggle" title="Toggle theme"></button>
+    </div>
+
+    <div class="auth-card fade-in">
+      <h2>Welcome back</h2>
+      <p class="subtitle">Sign in to your NextRide account</p>
+
+      <form class="auth-form" id="loginForm">
+        <div class="form-group">
+          <label class="form-label">College Email</label>
+          <input type="email" class="form-input" id="email" placeholder="you@college.edu" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-input" id="password" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full btn-lg" id="loginBtn">
+          Sign In
+        </button>
+      </form>
+
+      <div class="divider-text" style="margin-top:20px">or</div>
+
+      <p style="text-align:center;font-size:0.875rem;color:var(--text-muted);margin-top:12px">
+        Don't have an account?
+        <a href="/register" style="color:var(--accent-1);font-weight:600">Create one</a>
+      </p>
+
+      <!-- Demo credentials -->
+      <div style="margin-top:20px;padding:12px;background:rgba(99,102,241,0.06);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:0.8rem;color:var(--text-muted)">
+        <strong style="color:var(--text-secondary)">Demo accounts:</strong><br>
+        arjun@college.edu / arjun123<br>
+        priya@college.edu / priya123
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/main.js"></script>
+<script>
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Signing in...';
+
+  try {
+    await API.post('/api/login', {
+      email:    document.getElementById('email').value,
+      password: document.getElementById('password').value,
+    });
+    window.location.href = '/dashboard';
+  } catch (err) {
+    Toast.show(err.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = 'Sign In';
+  }
+});
+</script>
+</body>
+</html>

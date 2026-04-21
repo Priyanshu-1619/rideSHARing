@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block title %}Post a Ride{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>➕ Post a Ride</h2>
+  <p>Offer seats in your vehicle and split the travel cost</p>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:28px;max-width:900px">
+
+  <!-- Form -->
+  <div class="card">
+    <h3 style="margin-bottom:20px">Ride Details</h3>
+    <form id="postRideForm" style="display:flex;flex-direction:column;gap:16px">
+
+      <div class="form-group">
+        <label class="form-label">From (Source)</label>
+        <input type="text" class="form-input" id="source" placeholder="e.g. Main Gate, Hostel A" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">To (Destination)</label>
+        <input type="text" class="form-input" id="destination" placeholder="e.g. Railway Station, Airport" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Departure Date & Time</label>
+        <input type="datetime-local" class="form-input" id="rideTime" required>
+      </div>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">Total Seats</label>
+          <select class="form-select" id="totalSeats">
+            <option value="1">1 seat</option>
+            <option value="2">2 seats</option>
+            <option value="3" selected>3 seats</option>
+            <option value="4">4 seats</option>
+            <option value="5">5 seats</option>
+            <option value="6">6 seats</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Price per Seat (₹)</label>
+          <input type="number" class="form-input" id="pricePerSeat" placeholder="0" min="0" step="5" value="50">
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-full btn-lg" id="submitBtn">
+        🚗 Post Ride
+      </button>
+    </form>
+  </div>
+
+  <!-- Preview + My Rides -->
+  <div style="display:flex;flex-direction:column;gap:20px">
+
+    <!-- Preview Card -->
+    <div class="card">
+      <h3 style="margin-bottom:16px">Preview</h3>
+      <div id="previewCard">
+        <div class="empty-state" style="padding:24px">
+          <div class="empty-icon">🚗</div>
+          <p>Fill in the form to see a preview</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- My Posted Rides -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <h3>My Posted Rides</h3>
+        <button class="btn btn-ghost btn-sm" onclick="loadMyRides()">↻ Refresh</button>
+      </div>
+      <div id="myRidesList">
+        <div class="loading-overlay"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Set min datetime to now+30min
+const now = new Date(Date.now() + 30*60000);
+document.getElementById('rideTime').min = now.toISOString().slice(0,16);
+document.getElementById('rideTime').value = new Date(Date.now() + 2*3600000).toISOString().slice(0,16);
+
+// Live preview
+['source','destination','rideTime','totalSeats','pricePerSeat'].forEach(id => {
+  document.getElementById(id).addEventListener('input', updatePreview);
+});
+
+function updatePreview() {
+  const src   = document.getElementById('source').value || 'Source';
+  const dest  = document.getElementById('destination').value || 'Destination';
+  const time  = document.getElementById('rideTime').value;
+  const seats = document.getElementById('totalSeats').value;
+  const price = document.getElementById('pricePerSeat').value || '0';
+
+  document.getElementById('previewCard').innerHTML = `
+    <div class="ride-card" style="pointer-events:none">
+      <div class="flex items-center justify-between">
+        <div class="driver-info">
+          <div class="driver-avatar">ME</div>
+          <span>You (Driver)</span>
+        </div>
+        <span class="badge badge-open">Open</span>
+      </div>
+      <div class="ride-route">
+        <span>${src}</span><span class="arrow">→</span><span>${dest}</span>
+      </div>
+      <div class="ride-meta">
+        <span class="meta-chip">🕐 ${time ? Format.datetime(time) : 'Select time'}</span>
+        <span class="meta-chip">💺 ${seats} seats</span>
+      </div>
+      <div class="ride-footer">
+        <span class="price-tag">₹${parseFloat(price).toFixed(2)}/seat</span>
+      </div>
+    </div>
+  `;
+}
+
+updatePreview();
+
+// Submit
+document.getElementById('postRideForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Posting...';
+
+  try {
+    await API.post('/api/rides', {
+      source:         document.getElementById('source').value,
+      destination:    document.getElementById('destination').value,
+      ride_time:      document.getElementById('rideTime').value,
+      total_seats:    parseInt(document.getElementById('totalSeats').value),
+      price_per_seat: parseFloat(document.getElementById('pricePerSeat').value),
+    });
+    Toast.show('Ride posted successfully!', 'success');
+    document.getElementById('postRideForm').reset();
+    updatePreview();
+    loadMyRides();
+  } catch(e) {
+    Toast.show(e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.innerHTML = '🚗 Post Ride';
+  }
+});
+
+// My rides
+async function loadMyRides() {
+  const list = document.getElementById('myRidesList');
+  try {
+    const rides = await API.get('/api/my-rides');
+    if (!rides.length) {
+      list.innerHTML = `<div class="empty-state" style="padding:20px"><p>No rides posted yet</p></div>`;
+      return;
+    }
+    list.innerHTML = rides.slice(0,4).map(r => `
+      <div style="padding:12px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:0.9rem;font-weight:600">${r.source} → ${r.destination}</div>
+          <div style="font-size:0.78rem;color:var(--text-muted)">${Format.datetime(r.ride_time)}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${badge(r.status)}
+          ${r.status === 'Open' ? `<button class="btn btn-danger btn-sm" onclick="cancelRide(${r.ride_id})">Cancel</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch(e) {
+    list.innerHTML = `<p style="color:var(--text-muted);font-size:0.875rem">Failed to load rides</p>`;
+  }
+}
+
+async function cancelRide(rideId) {
+  if (!confirm('Cancel this ride?')) return;
+  try {
+    await API.delete(`/api/rides/${rideId}`);
+    Toast.show('Ride cancelled', 'info');
+    loadMyRides();
+  } catch(e) { Toast.show(e.message, 'error'); }
+}
+
+loadMyRides();
+</script>
+{% endblock %}

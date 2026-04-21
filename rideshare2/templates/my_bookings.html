@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}My Bookings{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>🎫 My Bookings</h2>
+  <p>All your ride requests and confirmed bookings</p>
+</div>
+
+<div id="bookingsContainer">
+  <div class="loading-overlay"><div class="spinner"></div><span>Loading bookings...</span></div>
+</div>
+
+<!-- Penalty Warning Modal -->
+<div id="penaltyModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center" data-request-id="" data-status="">
+  <div style="background:var(--bg-secondary);border-radius:var(--radius-lg);padding:24px;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="font-size:48px;margin-bottom:12px">⚠️</div>
+      <h2 style="margin:0;color:var(--text-primary)">Cancel Booking?</h2>
+    </div>
+    
+    <div id="penaltyMessage" style="background:rgba(239,68,68,0.1);border:2px solid rgb(239,68,68);border-radius:var(--radius-md);padding:16px;margin-bottom:20px;text-align:center">
+      <strong style="color:rgb(220,38,38);display:block;margin-bottom:8px">Cancellation Penalty: ₹<span id="penaltyAmount">0</span></strong>
+      <p style="margin:0;color:var(--text-secondary);font-size:0.875rem">Cancelling an accepted booking will incur a penalty fee</p>
+    </div>
+    
+    <p style="color:var(--text-secondary);text-align:center;margin:16px 0;font-size:0.9rem">Are you sure you want to cancel this booking?</p>
+    
+    <div style="display:flex;gap:12px;justify-content:center">
+      <button onclick="closePenaltyModal()" class="btn" style="flex:1">Keep Booking</button>
+      <button onclick="confirmCancelBooking()" class="btn btn-danger" style="flex:1">Yes, Cancel</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let pendingCancelRequestId = null;
+let pendingCancelStatus = null;
+
+function showPenaltyModal(reqId, status) {
+  console.log('showPenaltyModal called with:', { reqId, status, type: typeof reqId });
+  const modal = document.getElementById('penaltyModal');
+  modal.setAttribute('data-request-id', reqId);
+  modal.setAttribute('data-status', status);
+  
+  const penaltyAmount = status === 'Accepted' ? 100 : 0;
+  document.getElementById('penaltyAmount').textContent = penaltyAmount;
+  
+  modal.style.display = 'flex';
+}
+
+function closePenaltyModal() {
+  const modal = document.getElementById('penaltyModal');
+  modal.style.display = 'none';
+  modal.setAttribute('data-request-id', '');
+  modal.setAttribute('data-status', '');
+}
+
+function handleCancelClick(button) {
+  const requestId = button.getAttribute('data-request-id');
+  const status = button.getAttribute('data-status');
+  console.log('Cancel clicked - requestId:', requestId, 'status:', status);
+  showPenaltyModal(requestId, status);
+}
+
+async function confirmCancelBooking() {
+  const modal = document.getElementById('penaltyModal');
+  const requestId = modal.getAttribute('data-request-id');
+  console.log('confirmCancelBooking called with requestId:', requestId);
+  
+  if (!requestId) {
+    console.error('No requestId available');
+    return;
+  }
+  
+  closePenaltyModal();
+  
+  try {
+    const response = await API.patch(`/api/requests/${requestId}/cancel`);
+    
+    const penaltyMsg = response.penalty_applied 
+      ? `with ₹${response.penalty_amount} penalty applied` 
+      : 'without penalty';
+    
+    Toast.show(`✅ Booking cancelled ${penaltyMsg}`, 'success');
+    loadBookings();
+  } catch(e) { 
+    Toast.show(`❌ Error: ${e.message}`, 'error'); 
+  }
+}
+
+async function loadBookings() {
+  const container = document.getElementById('bookingsContainer');
+  try {
+    const bookings = await API.get('/api/my-bookings');
+    console.log('Loaded bookings:', bookings);  // Debug log
+    if (!bookings.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🎫</div>
+          <h3>No bookings yet</h3>
+          <p>Find a ride and send a request to get started</p>
+          <a href="/search" class="btn btn-primary" style="margin-top:12px">Find Rides</a>
+        </div>`;
+      return;
+    }
+
+    const statusOrder = { Accepted:0, Pending:1, Rejected:2, Cancelled:3 };
+    bookings.sort((a,b) => (statusOrder[a.req_status]||9) - (statusOrder[b.req_status]||9));
+
+    container.innerHTML = `
+      <div class="rides-grid">
+        ${bookings.map(b => `
+          <div class="ride-card">
+            <div class="flex items-center justify-between">
+              <div class="driver-info">
+                <div class="driver-avatar">${Format.initials(b.driver_name)}</div>
+                <div>
+                  <div style="font-weight:600;font-size:0.9rem">${b.driver_name}</div>
+                  <div style="font-size:0.75rem;color:var(--text-muted)">${b.driver_phone || ''}</div>
+                </div>
+              </div>
+              ${badge(b.req_status)}
+            </div>
+
+            <div class="ride-route">
+              <span>${b.source}</span><span class="arrow">→</span><span>${b.destination}</span>
+            </div>
+
+            <div class="ride-meta">
+              <span class="meta-chip">🕐 ${Format.datetime(b.ride_time)}</span>
+            </div>
+
+            <div style="background:rgba(99,102,241,0.06);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;display:flex;justify-content:space-between;font-size:0.875rem">
+              <span style="color:var(--text-secondary)">Fare</span>
+              <strong>${Format.currency(b.amount || b.price_per_seat)}</strong>
+            </div>
+
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <span class="meta-chip" style="flex:1;justify-content:center;min-width:150px">
+                Payment: ${b.payment_status || 'Pending'}
+              </span>
+              ${b.req_status === 'Pending' || b.req_status === 'Accepted' ? `
+                <button class="btn btn-danger btn-sm" data-request-id="${b.request_id}" data-status="${b.req_status}">
+                  Cancel
+                </button>` : ''}
+            </div>
+            
+            ${b.req_status === 'Accepted' ? `
+              <div style="background:rgba(239,68,68,0.1);border-left:4px solid rgb(239,68,68);padding:8px 12px;margin-top:12px;border-radius:var(--radius-sm)">
+                <span style="color:rgb(220,38,38);font-size:0.75rem;font-weight:600">⚠️ Cancellation penalty: ₹100</span>
+              </div>` : ''}
+          </div>
+        `).join('')}
+      </div>`;
+  } catch(e) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><h3>${e.message}</h3></div>`;
+  }
+}
+
+loadBookings();
+
+// Event delegation for cancel buttons (exclude modal buttons)
+document.addEventListener('click', function(e) {
+  // Only handle button clicks that are NOT in the penalty modal
+  if (e.target.classList && e.target.classList.contains('btn-danger') && !e.target.closest('#penaltyModal')) {
+    const requestId = e.target.getAttribute('data-request-id');
+    const status = e.target.getAttribute('data-status');
+    console.log('Cancel button clicked via delegation:', { requestId, status });
+    if (requestId && status) {
+      showPenaltyModal(requestId, status);
+    }
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}My Penalties{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>⚠️ Penalties & Violations</h2>
+  <p>View all penalties applied to your account</p>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-bottom:24px">
+  <div class="stat-card">
+    <div style="font-size:2em;margin-bottom:8px">📊</div>
+    <div style="color:var(--text-secondary);font-size:0.875rem">Total Penalties</div>
+    <div style="font-size:1.5em;font-weight:700;color:rgb(220,38,38)">₹<span id="totalPenalty">0</span></div>
+  </div>
+  <div class="stat-card">
+    <div style="font-size:2em;margin-bottom:8px">🚨</div>
+    <div style="color:var(--text-secondary);font-size:0.875rem">Violations</div>
+    <div style="font-size:1.5em;font-weight:700" id="totalViolations">0</div>
+  </div>
+  <div class="stat-card">
+    <div style="font-size:2em;margin-bottom:8px">⭐</div>
+    <div style="color:var(--text-secondary);font-size:0.875rem">Reliability Score</div>
+    <div style="font-size:1.5em;font-weight:700;color:rgb(34,197,94)" id="reliabilityScore">–</div>
+  </div>
+</div>
+
+<div id="penaltiesContainer">
+  <div class="loading-overlay"><div class="spinner"></div><span>Loading penalties...</span></div>
+</div>
+
+<style>
+  .stat-card {
+    background:var(--bg-secondary);
+    border:1px solid var(--border);
+    border-radius:var(--radius-md);
+    padding:16px;
+  }
+  
+  .penalty-card {
+    background:var(--bg-secondary);
+    border-left:4px solid rgb(239,68,68);
+    border-radius:var(--radius-md);
+    padding:16px;
+    margin-bottom:12px;
+  }
+  
+  .penalty-type {
+    display:inline-block;
+    padding:4px 12px;
+    border-radius:var(--radius-sm);
+    font-size:0.75rem;
+    font-weight:600;
+    margin-bottom:8px;
+  }
+  
+  .penalty-cancellation { background:rgba(239,68,68,0.2);color:rgb(220,38,38); }
+  .penalty-delay { background:rgba(249,115,22,0.2);color:rgb(234,88,12); }
+  .penalty-missed { background:rgba(59,130,246,0.2);color:rgb(37,99,235); }
+  .penalty-driver-cancel { background:rgba(168,85,247,0.2);color:rgb(147,51,234); }
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadPenalties() {
+  const container = document.getElementById('penaltiesContainer');
+  try {
+    const data = await API.get('/api/penalties');
+    const ratingData = await API.get('/api/user/rating');
+    
+    // Update stats
+    document.getElementById('totalPenalty').textContent = data.total_penalty.toFixed(2);
+    document.getElementById('totalViolations').textContent = data.count;
+    document.getElementById('reliabilityScore').textContent = ratingData.reliability_score.toFixed(0) + '%';
+    
+    if (!data.penalties || data.penalties.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">✅</div>
+          <h3>No Penalties</h3>
+          <p>Great! You have a clean record. Keep up the good behavior!</p>
+        </div>`;
+      return;
+    }
+
+    const typeColors = {
+      'Cancellation': 'penalty-cancellation',
+      'Delay': 'penalty-delay',
+      'Missed-Ride': 'penalty-missed',
+      'Driver-Cancellation': 'penalty-driver-cancel'
+    };
+    
+    const typeIcons = {
+      'Cancellation': '❌',
+      'Delay': '⏱',
+      'Missed-Ride': '👤',
+      'Driver-Cancellation': '🚫'
+    };
+
+    container.innerHTML = `
+      <div>
+        <h3 style="margin-top:24px;margin-bottom:16px">Penalty History</h3>
+        ${data.penalties.map(p => `
+          <div class="penalty-card">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px">
+              <div>
+                <div class="penalty-type ${typeColors[p.penalty_type]}">
+                  ${typeIcons[p.penalty_type] || '⚠️'} ${p.penalty_type}
+                </div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-size:1.25em;font-weight:700;color:rgb(220,38,38)">₹${p.amount.toFixed(2)}</div>
+                <div style="font-size:0.75rem;color:var(--text-muted)">${Format.datetime(p.applied_at)}</div>
+              </div>
+            </div>
+            
+            <div style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:8px">
+              <strong>${p.source}</strong> → <strong>${p.destination}</strong>
+            </div>
+            
+            ${p.reason ? `<div style="color:var(--text-muted);font-size:0.85rem">Reason: ${p.reason}</div>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch(e) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><h3>${e.message}</h3></div>`;
+  }
+}
+
+loadPenalties();
+</script>
+{% endblock %}

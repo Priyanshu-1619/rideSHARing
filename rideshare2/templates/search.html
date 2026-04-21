@@ -1,0 +1,475 @@
+{% extends "base.html" %}
+{% block title %}Find Rides{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  .search-page {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .top-search-bar {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 20px 24px;
+    display: flex;
+    gap: 14px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .top-search-bar .form-group {
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .sort-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+
+  .sort-bar .results-count {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+  }
+
+  .sort-select {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+
+  #map {
+    height: 320px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .view-toggle {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    padding: 3px;
+    border-radius: var(--radius-sm);
+  }
+
+  .view-btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    transition: all var(--transition);
+  }
+
+  .view-btn.active {
+    background: var(--accent-1);
+    color: #fff;
+  }
+
+  .filter-section input[type="range"] {
+    margin: 6px 0;
+  }
+
+  .range-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>🔍 Find a Ride</h2>
+  <p>Discover available rides on campus</p>
+</div>
+
+<div class="search-page">
+
+  <!-- Top Search Bar -->
+  <div class="top-search-bar">
+    <div class="form-group">
+      <label class="form-label">From</label>
+      <input type="text" class="form-input" id="srcInput" placeholder="Source location">
+    </div>
+    <div class="form-group">
+      <label class="form-label">To</label>
+      <input type="text" class="form-input" id="destInput" placeholder="Destination">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Date</label>
+      <input type="date" class="form-input" id="dateInput">
+    </div>
+    <div class="form-group" style="display:flex;align-items:center;gap:8px;min-width:unset">
+      <input type="checkbox" id="showAllRidesToggle" style="margin-right:6px">
+      <label for="showAllRidesToggle" style="font-size:0.95em;cursor:pointer">Show my rides too</label>
+    </div>
+    <button class="btn btn-primary" onclick="applyFilters()" style="flex-shrink:0;height:42px">
+      Search
+    </button>
+    <button class="btn btn-ghost" onclick="clearFilters()" style="flex-shrink:0;height:42px">
+      Clear
+    </button>
+  </div>
+
+  <div class="search-layout">
+
+    <!-- Filter Sidebar -->
+    <div class="filter-sidebar">
+      <h3>⚙️ Filters</h3>
+
+      <div class="filter-section">
+        <h4>Price Range (₹/seat)</h4>
+        <input type="range" id="maxPrice" min="0" max="500" value="500" oninput="updatePriceLabel()">
+        <div class="range-labels"><span>₹0</span><span id="priceLabel">₹500</span></div>
+      </div>
+
+      <div class="filter-section">
+        <h4>Min Seats Available</h4>
+        <input type="range" id="minSeats" min="1" max="6" value="1" oninput="updateSeatsLabel()">
+        <div class="range-labels"><span>1</span><span id="seatsLabel">1+</span></div>
+      </div>
+
+      <div class="filter-section">
+        <h4>Time of Day</h4>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <label
+            style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.875rem;color:var(--text-secondary)">
+            <input type="checkbox" id="timeAll" checked onchange="timeFilterChange('all')"> Any time
+          </label>
+          <label
+            style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.875rem;color:var(--text-secondary)">
+            <input type="checkbox" id="timeMorning" onchange="timeFilterChange('morning')"> Morning (6AM–12PM)
+          </label>
+          <label
+            style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.875rem;color:var(--text-secondary)">
+            <input type="checkbox" id="timeAfternoon" onchange="timeFilterChange('afternoon')"> Afternoon (12–6PM)
+          </label>
+          <label
+            style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.875rem;color:var(--text-secondary)">
+            <input type="checkbox" id="timeEvening" onchange="timeFilterChange('evening')"> Evening (6PM+)
+          </label>
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-full btn-sm" onclick="applyFilters()">Apply Filters</button>
+    </div>
+
+    <!-- Results Panel -->
+    <div>
+
+      <!-- Sort Bar -->
+      <div class="sort-bar">
+        <span class="results-count" id="resultsCount">Loading rides...</span>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="view-toggle">
+            <button class="view-btn active" id="listViewBtn" onclick="setView('list')">☰ List</button>
+            <button class="view-btn" id="mapViewBtn" onclick="setView('map')">🗺 Map</button>
+          </div>
+          <div class="sort-select">
+            Sort:
+            <select class="form-select" id="sortSelect" style="width:auto;padding:6px 10px" onchange="applyFilters()">
+              <option value="ride_time">Earliest First</option>
+              <option value="price">Lowest Price</option>
+              <option value="available_seats">Most Seats</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Map View -->
+      <div id="mapView" style="display:none;margin-bottom:16px">
+        <div id="map"></div>
+      </div>
+
+      <!-- List View -->
+      <div id="listView">
+        <div class="rides-grid" id="ridesContainer">
+          <div class="loading-overlay">
+            <div class="spinner"></div><span>Finding rides...</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Request Confirmation Modal -->
+<div class="modal-overlay" id="requestModal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Confirm Request</h3>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">✕</button>
+    </div>
+    <div id="modalContent"></div>
+    <div style="display:flex;gap:10px;margin-top:20px">
+      <button class="btn btn-primary btn-full" id="confirmRequestBtn">Send Request</button>
+      <button class="btn btn-ghost btn-full" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  let allRides = [];
+  let map = null;
+  let markers = [];
+  let selectedRideId = null;
+  let currentView = 'list';
+
+  // ── Campus location coords (approximate, India)
+  const CAMPUS_COORDS = [28.6139, 77.2090]; // Default: Delhi NCR
+
+  // Location guesses for demo markers
+  const LOCATION_COORDS = {
+    'main gate': [28.6145, 77.2095],
+    'hostel a': [28.6120, 77.2070],
+    'library': [28.6160, 77.2110],
+    'canteen': [28.6130, 77.2085],
+    'gate 2': [28.6150, 77.2100],
+    'railway station': [28.6400, 77.2200],
+    'city mall': [28.5950, 77.1900],
+    'airport': [28.5562, 77.1000],
+    'bus stand': [28.6200, 77.2150],
+    'metro station': [28.6300, 77.2180],
+  };
+
+  function getCoords(loc) {
+    const key = (loc || '').toLowerCase();
+    return LOCATION_COORDS[key] || [
+      CAMPUS_COORDS[0] + (Math.random() - 0.5) * 0.02,
+      CAMPUS_COORDS[1] + (Math.random() - 0.5) * 0.02
+    ];
+  }
+
+  // ── Init Map
+  function initMap() {
+    if (map) return;
+    map = L.map('map').setView(CAMPUS_COORDS, 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+  }
+
+  // ── Set View
+  function setView(v) {
+    currentView = v;
+    document.getElementById('listView').style.display = v === 'list' ? '' : 'none';
+    document.getElementById('mapView').style.display = v === 'map' ? '' : 'none';
+    document.getElementById('listViewBtn').classList.toggle('active', v === 'list');
+    document.getElementById('mapViewBtn').classList.toggle('active', v === 'map');
+
+    if (v === 'map') {
+      initMap();
+      setTimeout(() => { map.invalidateSize(); updateMapMarkers(); }, 100);
+    }
+  }
+
+  function updateMapMarkers() {
+    markers.forEach(m => m.remove());
+    markers = [];
+    allRides.forEach(ride => {
+      const srcCoords = getCoords(ride.source);
+      const destCoords = getCoords(ride.destination);
+
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;padding:6px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.3)">₹${ride.price_per_seat} · ${ride.available_seats}💺</div>`,
+        iconAnchor: [40, 15]
+      });
+
+      const marker = L.marker(srcCoords, { icon })
+        .bindPopup(`
+        <div style="font-family:'Space Grotesk',sans-serif;min-width:180px">
+          <strong>${ride.source} → ${ride.destination}</strong><br>
+          <span style="color:#6366f1">₹${ride.price_per_seat}/seat</span> · ${ride.available_seats} seats<br>
+          <small>${Format.datetime(ride.ride_time)}</small><br>
+          Driver: ${ride.driver_name}<br>
+          <button onclick="openRequestModal(${ride.ride_id})" style="margin-top:8px;background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px">Request Ride</button>
+        </div>
+      `)
+        .addTo(map);
+
+      // Draw route line
+      L.polyline([srcCoords, destCoords], {
+        color: '#6366f1', weight: 2, dashArray: '6,4', opacity: 0.5
+      }).addTo(map);
+
+      markers.push(marker);
+    });
+  }
+
+  // ── Load Rides
+  async function loadRides() {
+
+    const params = new URLSearchParams({
+      source: document.getElementById('srcInput').value,
+      dest: document.getElementById('destInput').value,
+      date: document.getElementById('dateInput').value,
+      max_price: document.getElementById('maxPrice').value,
+      min_seats: document.getElementById('minSeats').value,
+      sort: document.getElementById('sortSelect').value,
+    });
+    if (document.getElementById('showAllRidesToggle').checked) {
+      params.append('all', 'true');
+    }
+
+    const container = document.getElementById('ridesContainer');
+    container.innerHTML = `<div class="loading-overlay"><div class="spinner"></div><span>Searching...</span></div>`;
+
+    try {
+      const rides = await API.get('/api/rides?' + params.toString());
+      allRides = applyTimeFilter(rides);
+
+      document.getElementById('resultsCount').textContent =
+        `${allRides.length} ride${allRides.length !== 1 ? 's' : ''} found`;
+
+      if (!allRides.length) {
+        container.innerHTML = `<div class="empty-state col-span-3"><div class="empty-icon">🚗</div><h3>No rides found</h3><p>Try adjusting your filters or check back later.</p></div>`;
+        return;
+      }
+
+      container.innerHTML = allRides.map(ride => rideCardHTML(ride, `
+      <button class="btn btn-primary btn-sm" onclick="openRequestModal(${ride.ride_id}, event)">
+        Request Ride
+      </button>
+    `)).join('');
+
+      if (currentView === 'map') updateMapMarkers();
+
+    } catch (e) {
+      container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><h3>${e.message}</h3></div>`;
+    }
+  }
+
+  function applyTimeFilter(rides) {
+    const all = document.getElementById('timeAll').checked;
+    const morning = document.getElementById('timeMorning').checked;
+    const afternoon = document.getElementById('timeAfternoon').checked;
+    const evening = document.getElementById('timeEvening').checked;
+
+    if (all) return rides;
+    return rides.filter(ride => {
+      const h = new Date(ride.ride_time).getHours();
+      if (morning && h >= 6 && h < 12) return true;
+      if (afternoon && h >= 12 && h < 18) return true;
+      if (evening && h >= 18) return true;
+      return false;
+    });
+  }
+
+  function applyFilters() { loadRides(); }
+
+  function clearFilters() {
+    document.getElementById('srcInput').value = '';
+    document.getElementById('destInput').value = '';
+    document.getElementById('dateInput').value = '';
+    document.getElementById('maxPrice').value = 500;
+    document.getElementById('minSeats').value = 1;
+    document.getElementById('sortSelect').value = 'ride_time';
+    document.getElementById('timeAll').checked = true;
+    updatePriceLabel(); updateSeatsLabel();
+    loadRides();
+  }
+
+  function updatePriceLabel() {
+    document.getElementById('priceLabel').textContent = '₹' + document.getElementById('maxPrice').value;
+  }
+
+  function updateSeatsLabel() {
+    document.getElementById('seatsLabel').textContent = document.getElementById('minSeats').value + '+';
+  }
+
+  function timeFilterChange(type) {
+    if (type === 'all') {
+      ['Morning', 'Afternoon', 'Evening'].forEach(t =>
+        document.getElementById('time' + t).checked = false
+      );
+    } else {
+      document.getElementById('timeAll').checked = false;
+    }
+  }
+
+  // ── Request Modal
+  function openRequestModal(rideId, e) {
+    if (e) e.stopPropagation();
+    const ride = allRides.find(r => r.ride_id === rideId);
+    if (!ride) return;
+    selectedRideId = rideId;
+
+    document.getElementById('modalContent').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="ride-route">
+        <span>${ride.source}</span>
+        <span class="arrow">→</span>
+        <span>${ride.destination}</span>
+      </div>
+      <div class="ride-meta">
+        <span class="meta-chip">🕐 ${Format.datetime(ride.ride_time)}</span>
+        <span class="meta-chip">💺 ${ride.available_seats} seats left</span>
+      </div>
+      <div style="background:rgba(99,102,241,0.08);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-top:4px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="color:var(--text-secondary)">Fare per seat</span>
+          <strong>${Format.currency(ride.price_per_seat)}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:var(--text-secondary)">Driver</span>
+          <strong>${ride.driver_name}</strong>
+        </div>
+      </div>
+    </div>
+  `;
+
+    document.getElementById('confirmRequestBtn').onclick = confirmRequest;
+    document.getElementById('requestModal').style.display = 'flex';
+  }
+
+  function closeModal() {
+    document.getElementById('requestModal').style.display = 'none';
+    selectedRideId = null;
+  }
+
+  async function confirmRequest() {
+    if (!selectedRideId) return;
+    const btn = document.getElementById('confirmRequestBtn');
+    btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Sending...';
+    try {
+      await API.post('/api/requests', { ride_id: selectedRideId });
+      Toast.show('Request sent! Waiting for driver approval.', 'success');
+      closeModal();
+      loadRides();
+    } catch (e) {
+      Toast.show(e.message, 'error');
+      btn.disabled = false; btn.innerHTML = 'Send Request';
+    }
+  }
+
+  // Close modal on overlay click
+  document.getElementById('requestModal').addEventListener('click', function (e) {
+    if (e.target === this) closeModal();
+  });
+
+  // ── Init
+  loadRides();
+</script>
+{% endblock %}

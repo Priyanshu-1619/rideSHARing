@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Ride Requests{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>📩 Ride Requests</h2>
+  <p>Accept or reject riders for your posted rides</p>
+</div>
+
+<div id="requestsContainer">
+  <div class="loading-overlay"><div class="spinner"></div><span>Loading requests...</span></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadRequests() {
+  const container = document.getElementById('requestsContainer');
+  try {
+    const requests = await API.get('/api/driver-requests');
+
+    if (!requests.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">📩</div>
+          <h3>No requests yet</h3>
+          <p>Requests from riders will appear here once you post a ride</p>
+          <a href="/post-ride" class="btn btn-primary" style="margin-top:12px">Post a Ride</a>
+        </div>`;
+      return;
+    }
+
+    // Group by ride
+    const byRide = {};
+    requests.forEach(r => {
+      const key = r.ride_id;
+      if (!byRide[key]) byRide[key] = { ride: r, reqs: [] };
+      byRide[key].reqs.push(r);
+    });
+
+    container.innerHTML = Object.values(byRide).map(group => `
+      <div class="card" style="margin-bottom:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div>
+            <h3>${group.ride.source} → ${group.ride.destination}</h3>
+            <p style="font-size:0.875rem;margin-top:2px">📅 ${Format.datetime(group.ride.ride_time)} &nbsp;·&nbsp; ₹${group.ride.price_per_seat}/seat</p>
+          </div>
+          <span class="badge badge-open">${group.reqs.length} request${group.reqs.length !== 1 ? 's' : ''}</span>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px">
+          ${group.reqs.map(req => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-sm)">
+              <div style="display:flex;align-items:center;gap:12px">
+                <div class="driver-avatar" style="width:40px;height:40px;font-size:0.9rem">${Format.initials(req.rider_name)}</div>
+                <div>
+                  <div style="font-weight:600">${req.rider_name}</div>
+                  <div style="font-size:0.78rem;color:var(--text-muted)">${req.rider_phone || 'No phone'}</div>
+                  <div style="font-size:0.75rem;color:var(--text-muted)">Requested: ${Format.datetime(req.created_at)}</div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                ${badge(req.req_status)}
+                ${req.req_status === 'Pending' ? `
+                  <button class="btn btn-success btn-sm" onclick="handleRequest(${req.request_id},'Accepted')">✓ Accept</button>
+                  <button class="btn btn-danger btn-sm"  onclick="handleRequest(${req.request_id},'Rejected')">✕ Reject</button>
+                ` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `).join('');
+
+  } catch(e) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><h3>${e.message}</h3></div>`;
+  }
+}
+
+async function handleRequest(reqId, status) {
+  const label = status === 'Accepted' ? 'accept' : 'reject';
+  if (!confirm(`Are you sure you want to ${label} this request?`)) return;
+  try {
+    await API.patch(`/api/requests/${reqId}`, { status });
+    Toast.show(`Request ${status.toLowerCase()} successfully`, status === 'Accepted' ? 'success' : 'info');
+    loadRequests();
+  } catch(e) { Toast.show(e.message, 'error'); }
+}
+
+loadRequests();
+</script>
+{% endblock %}
