@@ -1,6 +1,7 @@
 """
 NextRide — Launch script
 Run from the project root: python run.py
+For production on Render, use: gunicorn -w 4 -b 0.0.0.0:$PORT wsgi:app
 """
 import sys
 import os
@@ -24,5 +25,14 @@ from app import app, init_db, USE_MYSQL
 if __name__ == '__main__':
     if not USE_MYSQL:
         init_db()
-    print("\n🚗 NextRide is running at http://localhost:5000\n")
-    app.run(debug=True, port=5000, host="127.0.0.1")
+    
+    # Get port from environment (Render sets this), default to 8080 for local dev
+    port = int(os.environ.get('PORT', 8080))
+    
+    # Check if running in production
+    is_production = os.environ.get('FLASK_ENV') == 'production' or os.environ.get('RENDER') == 'true'
+    
+    print(f"\n🚗 NextRide is running at http://0.0.0.0:{port}\n")
+    
+    # Use debug mode only in development
+    app.run(debug=not is_production, port=port, host="0.0.0.0")

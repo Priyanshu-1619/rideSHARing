@@ -1,0 +1,15 @@
+services:
+- type: web
+  name: rideSHARing
+  runtime: python
+  buildCommand: "pip install -r requirements.txt"
+  startCommand: "cd rideshare2 && gunicorn -w 4 -b 0.0.0.0:$PORT --timeout 120 wsgi:app"
+  envVars:
+  - key: PYTHON_VERSION
+    value: 3.11
+  - key: SECRET_KEY
+    generateValue: true
+  - key: FLASK_ENV
+    value: production
+  - key: USE_MYSQL
+    value: "False"

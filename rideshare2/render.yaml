@@ -1,0 +1,22 @@
+services:
+- type: web
+  name: ridesHARing
+  runtime: python
+  buildCommand: "pip install -r requirements.txt"
+  startCommand: "gunicorn -w 4 -b 0.0.0.0:$PORT --timeout 120 wsgi:app"
+  envVars:
+  - key: PYTHON_VERSION
+    value: 3.11
+  - key: SECRET_KEY
+    generateValue: true
+  - key: FLASK_ENV
+    value: production
+  - key: USE_MYSQL
+    value: "False"
+
+# Optional: Add a PostgreSQL database for production
+# databases:
+# - name: ridesHARing-db
+#   databaseName: ridesHARing
+#   user: ridesHARing_user
+#   plan: free

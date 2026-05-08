@@ -138,11 +138,11 @@ def init_db():
         # Seed rides
         now = datetime.now()
         rides = [
-            (1, 'Main Gate', 'Railway Station', (now+timedelta(hours=2)).strftime('%Y-%m-%d %H:%M'), 3, 3, 50.0,  'Open'),
-            (2, 'Hostel A',  'City Mall',        (now+timedelta(hours=3)).strftime('%Y-%m-%d %H:%M'), 2, 2, 30.0,  'Open'),
-            (3, 'Library',   'Airport',          (now+timedelta(hours=5)).strftime('%Y-%m-%d %H:%M'), 4, 4, 120.0, 'Open'),
-            (4, 'Canteen',   'Bus Stand',        (now+timedelta(hours=1)).strftime('%Y-%m-%d %H:%M'), 3, 3, 20.0,  'Open'),
-            (5, 'Gate 2',    'Metro Station',    (now+timedelta(hours=4)).strftime('%Y-%m-%d %H:%M'), 2, 2, 40.0,  'Open'),
+            (1, 'Main Gate', 'Railway Station', (now+timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M'), 3, 3, 50.0,  'Open'),
+            (2, 'Hostel A',  'City Mall',        (now+timedelta(hours=3)).strftime('%Y-%m-%dT%H:%M'), 2, 2, 30.0,  'Open'),
+            (3, 'Library',   'Airport',          (now+timedelta(hours=5)).strftime('%Y-%m-%dT%H:%M'), 4, 4, 120.0, 'Open'),
+            (4, 'Canteen',   'Bus Stand',        (now+timedelta(hours=1)).strftime('%Y-%m-%dT%H:%M'), 3, 3, 20.0,  'Open'),
+            (5, 'Gate 2',    'Metro Station',    (now+timedelta(hours=4)).strftime('%Y-%m-%dT%H:%M'), 2, 2, 40.0,  'Open'),
         ]
         cur.executemany(
             "INSERT INTO Rides (driver_id,source,destination,ride_time,total_seats,available_seats,price_per_seat,status) VALUES (?,?,?,?,?,?,?,?)",
@@ -493,10 +493,16 @@ def api_handle_request(req_id):
 
     # Update payment status
     if status == 'Accepted':
-        cur.execute(f"""
-            UPDATE Payments SET status='Paid', paid_at=datetime('now')
-            WHERE request_id={ph}
-        """, (req_id,))
+        if not USE_MYSQL:
+            cur.execute(f"""
+                UPDATE Payments SET status='Paid', paid_at=datetime('now')
+                WHERE request_id={ph}
+            """, (req_id,))
+        else:
+            cur.execute(f"""
+                UPDATE Payments SET status='Paid', paid_at=NOW()
+                WHERE request_id={ph}
+            """, (req_id,))
 
     conn.commit()
     conn.close()
@@ -613,12 +619,42 @@ def api_complete_ride(ride_id):
     
     penalties_applied = []
     
+    # Parse actual arrival time
     try:
-        actual_time = datetime.fromisoformat(actual_arrival_time.replace('Z', '+00:00')) if 'T' in actual_arrival_time else datetime.strptime(actual_arrival_time, '%Y-%m-%d %H:%M:%S')
+        if isinstance(actual_arrival_time, str):
+            # Try different formats
+            for fmt in ['%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M', '%Y-%m-%d %H:%M:%S']:
+                try:
+                    actual_time = datetime.strptime(actual_arrival_time.split('.')[0], fmt)
+                    break
+                except:
+                    continue
+            else:
+                actual_time = datetime.now()
+        else:
+            actual_time = actual_arrival_time if actual_arrival_time else datetime.now()
     except:
         actual_time = datetime.now()
     
-    scheduled_time = datetime.fromisoformat(ride['ride_time'].replace('Z', '+00:00')) if isinstance(ride['ride_time'], str) and 'T' in ride['ride_time'] else datetime.strptime(ride['ride_time'], '%Y-%m-%d %H:%M:%S') if isinstance(ride['ride_time'], str) else ride['ride_time']
+    # Parse scheduled ride time
+    try:
+        ride_time_str = ride['ride_time']
+        if isinstance(ride_time_str, str):
+            # Try different formats
+            for fmt in ['%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M', '%Y-%m-%d %H:%M:%S']:
+                try:
+                    scheduled_time = datetime.strptime(ride_time_str.split('.')[0], fmt)
+                    break
+                except:
+                    continue
+            else:
+                conn.close()
+                return jsonify({'error': 'Invalid ride time format'}), 400
+        else:
+            scheduled_time = ride_time_str
+    except:
+        conn.close()
+        return jsonify({'error': 'DateTime parsing error'}), 400
     
     # Check for delays
     delay_minutes = max(0, (actual_time - scheduled_time).total_seconds() / 60)
@@ -875,4 +911,4 @@ def api_stats():
 if __name__ == '__main__':
     if not USE_MYSQL:
         init_db()
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=8080, host="0.0.0.0")
